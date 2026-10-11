@@ -9,34 +9,21 @@ from fastapi.responses import JSONResponse
 app = FastAPI()
 
 # CORS configuration
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Expose-Headers": "Access-Control-Allow-Origin",
-}
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
     expose_headers=["Access-Control-Allow-Origin"],
 )
 
-# Load dataset
-# Assumes q-vercel-latency.json is inside the api folder,
-# alongside this index.py file.
+# Load the dataset
+# q-vercel-latency.json must be inside the api folder,
+# alongside index.py.
 DATA_FILE = Path(__file__).resolve().parent / "q-vercel-latency.json"
 
-try:
-    with open(DATA_FILE, "r", encoding="utf-8") as file:
-        DATA = json.load(file)
-except (FileNotFoundError, json.JSONDecodeError) as error:
-    raise RuntimeError(
-        f"Could not load dataset from {DATA_FILE}: {error}"
-    ) from error
+with open(DATA_FILE, "r", encoding="utf-8") as file:
+    DATA = json.load(file)
 
 
 @app.get("/")
@@ -54,7 +41,6 @@ async def calculate_metrics(request: Request):
             return JSONResponse(
                 status_code=400,
                 content={"error": "Request body must be a JSON object"},
-                headers=CORS_HEADERS,
             )
 
         regions = body.get("regions", [])
@@ -64,7 +50,6 @@ async def calculate_metrics(request: Request):
             return JSONResponse(
                 status_code=400,
                 content={"error": "'regions' must be a list"},
-                headers=CORS_HEADERS,
             )
 
         result = {}
@@ -87,6 +72,7 @@ async def calculate_metrics(request: Request):
             latencies = [
                 float(row["latency_ms"]) for row in rows
             ]
+
             uptimes = [
                 float(row["uptime_pct"]) for row in rows
             ]
@@ -96,7 +82,8 @@ async def calculate_metrics(request: Request):
                 "p95_latency": float(np.percentile(latencies, 95)),
                 "avg_uptime": float(np.mean(uptimes)),
                 "breaches": sum(
-                    latency > threshold for latency in latencies
+                    latency > threshold
+                    for latency in latencies
                 ),
             }
 
@@ -106,7 +93,6 @@ async def calculate_metrics(request: Request):
         return JSONResponse(
             status_code=400,
             content={"error": "Invalid request or dataset format"},
-            headers=CORS_HEADERS,
         )
 
 
@@ -115,5 +101,4 @@ async def calculate_metrics(request: Request):
 async def options_handler():
     return JSONResponse(
         content={"status": "ok"},
-        headers=CORS_HEADERS,
     )
